@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from "react";
 import supabase from "@/lib/supabaseClient";
-import Header from "@/components/Header";
-import ConditionalNavbar from "@/components/ConditionalNavbar";
+import Header from "./Header";
 import { Suspense } from "react";
 // import { CartProvider } from "@/contexts/CartContext"; // optional, keep or remove if you don't have it
 
