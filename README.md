@@ -1,36 +1,55 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 🛒 Next.js + Supabase E-Commerce Platform
 
-## Getting Started
+A modern, fully responsive E-Commerce Web Application built using Next.js (App Router), Supabase, Tailwind CSS, localForage, and shadcn/ui. Includes authentication, protected routes, product filtering, cart persistence, checkout flow, and complete order history.
 
-First, run the development server:
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## 🚀 Features
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 🔐 Authentication (Supabase Auth)
+- **Email & Password Login / Signup**
+- **Real-time auth state sync**
+- **Protected routes** (Checkout, Orders)
+- **Auto session recovery** on refresh
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 🛍 Product System
+- **Product listing with pagination**
+- **Filtering** by min price, max price, and category
+- **Fully responsive product grid**
+- **Category chip** displayed on each product
+- **Clean UI** with shadcn components
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### 🛒 Persistent Cart (Local + Cloud Sync)
+- **Add, update, and remove items**
+- **Cart persists** even after refresh
+- **Syncs to Supabase** when logged in
+- **Clears automatically** on logout
+- **Cart badge** shown in header
+- Uses **React Context** for global state
 
-## Learn More
+### 📦 Checkout & Orders
+- **Checkout page** with shipping details
+- **Saves order** to Supabase orders table
+- **Clears cart** after successful checkout
+- **Orders page** displays complete order history
+- **Expandable order details** (items + shipping)
 
-To learn more about Next.js, take a look at the following resources:
+### 💅 Modern, Responsive UI
+- **Mobile-friendly navigation** (hamburger)
+- **Desktop categories bar** + conditional navbar
+- **Sticky sidebar filters** on desktop
+- **Collapsible filters** on mobile
+- **Smooth layout & spacing** with Tailwind
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## 🧱 Tech Stack
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+| Technology | Purpose |
+|------------|---------|
+| Next.js 14 (App Router) | Frontend, routing, SSR/CSR |
+| Supabase | Auth, Database, Storage |
+| Tailwind CSS | Styling |
+| shadcn/ui | Reusable UI components |
+| localForage | Offline cart persistence |
+| React Context | Cart state management |
+| PostgreSQL | Products, Carts & Orders |
 
-## Deploy on Vercel
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
