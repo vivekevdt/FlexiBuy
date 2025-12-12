@@ -123,8 +123,8 @@ export default function ChatWidget() {
           open ? 'translate-y-0 opacity-100' : 'translate-y-6 opacity-0 pointer-events-none'
         }`}
       >
-        <Card ref={panelRef as any} className="bg-neutral-950 border border-neutral-800 text-white shadow-2xl">
-          <CardHeader className="flex items-center justify-between gap-2 px-4 py-3 bg-gradient-to-r from-neutral-900 to-black">
+        <Card ref={panelRef as any} className="bg-neutral-950 border border-neutral-800 text-white shadow-2xl ">
+          <CardHeader className="flex items-center justify-between gap-2 px-4 py-1 bg-gradient-to-r from-neutral-900 to-black">
             <div className="flex items-center gap-3">
               <Avatar className="w-9 h-9 bg-white/5">
                 {/* If you have an assistant image use <AvatarImage src="..." /> */}
@@ -141,7 +141,7 @@ export default function ChatWidget() {
           </CardHeader>
 
           <CardContent className="p-0">
-            <ScrollArea className="h-[360px] bg-neutral-900 p-4" ref={chatRef as any}>
+            <ScrollArea className="h-[220px] bg-neutral-900 p-4" ref={chatRef as any}>
               <div className="flex flex-col gap-3">
                 {messages.map((msg, i) => {
                   const isUser = msg.from === 'user';
