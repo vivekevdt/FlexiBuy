@@ -31,7 +31,6 @@ export default function Pagination({ page, totalPages }: Props) {
 
   function goTo(newPage: number) {
     // guard
-      console.log("page",page)
 
     if (newPage < 1 || newPage > totalPages) return;
     const qs = buildParams(newPage);

@@ -41,7 +41,6 @@ export default function SignIn() {
       if (data?.session) {
         // successful login
         // you can access data.session.user as data.session.user or data.user
-        console.log("Signed in, session:", data.session);
         router.replace("/products");
         return;
       }

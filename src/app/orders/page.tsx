@@ -39,7 +39,6 @@ export default function OrdersPage() {
       if (sessErr) throw sessErr;
 
       const user = sessionData?.session?.user ?? null;
-      console.log(user)
       if (!user) {
         setOrders([]);
         setError("You must be logged in to view orders.");

@@ -39,17 +39,12 @@ export default async function Page({ searchParams  }: any) {
       min: String(min),
       max: String(max),
     });
-    console.log(params);
 
     if (category) params.set("category", category);
     console.log(pageNumber);
 
     return `/products?${params.toString()}`;
   };
-  console.log("page",rawParams.min )
-  console.log("from",from )
-  console.log("to",to )
-  console.log(rawParams)
 
 
 

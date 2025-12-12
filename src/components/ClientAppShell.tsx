@@ -37,12 +37,10 @@ export default function ClientAppShell({
       (_event, session) => {
         if (!mounted) return;
         setUser(session?.user ?? null);
-        console.log(session?.user);
       }
     );
 
   }, []);
-  console.log("render")
 
   // while loading you can render a skeleton header or null
   return (

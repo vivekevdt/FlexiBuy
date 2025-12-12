@@ -13,10 +13,10 @@ type Message = {
   text: string;
 };
 
-export default function ChatWidget(): JSX.Element {
+export default function ChatWidget() {
   const [open, setOpen] = useState<boolean>(false);
   const [messages, setMessages] = useState<Message[]>([
-    { from: 'assistant', text: "Hi! Ask about products or say 'Compare Phone A and Phone B'." }
+    { from: 'assistant', text: "Hi! Ask about products or say 'Compare sansung galaxy21 and samsung galaxy s22' or 'give me details about samsung galaxy s21." }
   ]);
   const [input, setInput] = useState<string>('');
   const [sending, setSending] = useState<boolean>(false);
@@ -81,7 +81,6 @@ export default function ChatWidget(): JSX.Element {
         body: JSON.stringify({ message: trimmed })
       });
       const data = await res.json();
-      console.log(data)
       if (data?.ok) {
         setMessages(prev => [...prev, { from: 'assistant', text: data.reply }]);
       } else {
@@ -105,7 +104,7 @@ export default function ChatWidget(): JSX.Element {
   return (
     <>
       {/* Floating button */}
-      <div className="fixed bottom-6 right-6 z-50">
+      <div className="fixed bottom-4 right-6 z-50 m-1">
         <Button
           ref={buttonRef as any}
           onClick={() => setOpen(v => !v)}
@@ -129,7 +128,7 @@ export default function ChatWidget(): JSX.Element {
             <div className="flex items-center gap-3">
               <Avatar className="w-9 h-9 bg-white/5">
                 {/* If you have an assistant image use <AvatarImage src="..." /> */}
-                <AvatarFallback className="text-white">PA</AvatarFallback>
+                <AvatarFallback className="text-black">PA</AvatarFallback>
               </Avatar>
               <div>
                 <CardTitle className="text-sm text-white">Product Assistant</CardTitle>
@@ -150,7 +149,7 @@ export default function ChatWidget(): JSX.Element {
                     <div key={i} className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
                       {!isUser && (
                         <Avatar className="w-8 h-8 mr-3 bg-white/5">
-                          <AvatarFallback className="text-white">A</AvatarFallback>
+                          <AvatarFallback className="text-black">A</AvatarFallback>
                         </Avatar>
                       )}
 
