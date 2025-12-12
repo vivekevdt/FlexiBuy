@@ -16,7 +16,7 @@ type Message = {
 export default function ChatWidget() {
   const [open, setOpen] = useState<boolean>(false);
   const [messages, setMessages] = useState<Message[]>([
-    { from: 'assistant', text: "Hi! Ask about products or say 'Compare sansung galaxy21 and samsung galaxy s22' or 'give me details about samsung galaxy s21." }
+    { from: 'assistant', text: "Hi! Ask about products or say 'Compare sansung galaxy s21 and samsung galaxy s22' or 'give me details about samsung galaxy s21." }
   ]);
   const [input, setInput] = useState<string>('');
   const [sending, setSending] = useState<boolean>(false);
