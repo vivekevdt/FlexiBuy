@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import ChatBox from "@/components/ChatBox";
 
 export default function HomePage() {
   const categories = ["electronics", "clothes", "home", "books", "shoes"];
@@ -28,6 +29,7 @@ export default function HomePage() {
           ))}
         </div>
       </section>
+      <ChatBox/>
     </div>
   );
 }
