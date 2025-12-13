@@ -1,20 +1,25 @@
 // app/api/chat/route.ts
 import { NextResponse } from "next/server";
 
-const GEMINI_API_BASE = process.env.GEMINI_API_BASE;
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const GEMINI_API_BASE = process.env.GEMINI_API_BASE!;
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY!;
 const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 const GEMINI_TEMPERATURE = Number(process.env.GEMINI_TEMPERATURE || 0.0);
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
 
-/** Small helper type for tool responses */
 type ToolResp = { ok?: boolean; reply?: string; [k: string]: any };
 
-/** Calls Gemini/OpenAI-like chat completions */
-async function callGemini(messages: any[], temperature = GEMINI_TEMPERATURE) {
-  if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY not configured");
+function parseLLM(resp: any, fallback: string) {
+  return (
+    resp?.choices?.[0]?.message?.content ||
+    resp?.choices?.[0]?.text ||
+    fallback
+  ).toString();
+}
 
-  const url = `${GEMINI_API_BASE}/chat/completions`;
+async function callGemini(messages: any[], temperature = GEMINI_TEMPERATURE) {
+  if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY missing");
+
   const payload = {
     model: GEMINI_MODEL,
     messages,
@@ -22,7 +27,7 @@ async function callGemini(messages: any[], temperature = GEMINI_TEMPERATURE) {
     max_tokens: 1024,
   };
 
-  const resp = await fetch(url, {
+  const res = await fetch(`${GEMINI_API_BASE}/chat/completions`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -31,284 +36,218 @@ async function callGemini(messages: any[], temperature = GEMINI_TEMPERATURE) {
     body: JSON.stringify(payload),
   });
 
-
-  if (!resp.ok) {
-    const body = await resp.text();
-    throw new Error(`Gemini call failed (${resp.status}): ${body}`);
+  if (!res.ok) {
+    throw new Error(`Gemini Error ${res.status}: ${await res.text()}`);
   }
 
-  const data = await resp.json();
-  return data;
+  return res.json();
 }
 
-/** Merge/construct messages to send to LLM:
- * - If clientHistory provided, use it (but ensure a system message exists).
- * - Otherwise fall back to building the minimal messages as before.
- * - Always keep history length bounded to avoid token explosion.
- */
 function buildMessages({
-  clientHistory,
+  history,
   system,
-  extraSystem, // optional tool/system message (e.g. TOOL_RESULT)
+  extraSystem,
   userMsg,
   maxHistory = 12,
 }: {
-  clientHistory?: any[];
+  history?: any[];
   system: any;
-  extraSystem?: any | null;
+  extraSystem?: any;
   userMsg: any;
   maxHistory?: number;
 }) {
-  // prefer client history when available
-  if (Array.isArray(clientHistory) && clientHistory.length > 0) {
-    // ensure a system message is present at the beginning
-    const hasSystem = clientHistory.some((m) => m.role === "system");
-    // clone to avoid mutating caller's object
-    const base = hasSystem ? [...clientHistory] : [system, ...clientHistory];
+  if (history?.length) {
+    const hasSystem = history.some((m) => m.role === "system");
+    const base = hasSystem ? [...history] : [system, ...history];
 
-    // append extraSystem (tool/system) and user message at the end
     if (extraSystem) base.push(extraSystem);
     base.push(userMsg);
 
-    // trim to last `maxHistory` turns but keep the first system message
-    const sys = base.filter((m) => m.role === "system")[0];
-    const rest = base.filter((m) => m.role !== "system");
-    const trimmed = rest.slice(-maxHistory);
-    return [sys, ...trimmed];
+    const sys = base.find((m) => m.role === "system")!;
+    const rest = base.filter((m) => m.role !== "system").slice(-maxHistory);
+
+    return [sys, ...rest];
   }
 
-  // no client history: build from scratch
-  const arr = extraSystem ? [system, extraSystem, userMsg] : [system, userMsg];
-  // keep last maxHistory messages (plus system)
-  const sys = arr[0];
-  const rest = arr.slice(1).slice(-maxHistory);
-  return [sys, ...rest];
+  return extraSystem
+    ? [system, extraSystem, userMsg]
+    : [system, userMsg];
+}
+
+async function runTool(path: string, payload: any) {
+  const res = await fetch(`${BASE_URL}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  return res.json();
 }
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
+    const history = Array.isArray(body?.messages) ? body.messages : undefined;
+    const message = body?.message?.trim();
 
-    // accept optional client-provided chat history: [{role, content}, ...]
-    const clientHistory: any[] | undefined = Array.isArray(body?.messages)
-      ? body.messages
-      : undefined;
-
-    const message: string | undefined = body?.message;
     if (!message)
-      return NextResponse.json(
-        { ok: false, error: "message required" },
-        { status: 400 }
-      );
+      return NextResponse.json({ ok: false, error: "message required" });
 
-    const m = message.trim().toLowerCase();
-    const greetingTokens = [
-      "hi",
-      "hello",
-      "hey",
-      "hiya",
-      "good morning",
-      "good afternoon",
-      "good evening",
-    ];
-    if (greetingTokens.some((g) => m === g || m.startsWith(g + " "))) {
-      const assistantText =
-        "Hi! I'm your product assistant — try 'Tell me about Phone A' or 'Compare Phone A and Phone B'.";
+    const lower = message.toLowerCase();
+
+    // Quick greeting handler
+    const greetings = ["hi", "hello", "hey", "good morning", "good afternoon", "good evening"];
+    if (greetings.some((g) => lower === g || lower.startsWith(g + " "))) {
+      const reply =
+        "Hi! I'm your product assistant — ask about any product or say 'Compare Phone A and Phone B'.";
       return NextResponse.json({
         ok: true,
-        reply: assistantText,
-        assistantMessage: { role: "assistant", content: assistantText },
+        reply,
+        assistantMessage: { role: "assistant", content: reply },
       });
     }
 
-    // --- compare detection ---
-    const compareRegex = /compare\s+(.+?)\s+(and|vs|v|\bvs\b)\s+(.+?)[\?\.]*$/i;
-    const compareMatch = message.match(compareRegex);
+    // =====================
+    //  PRODUCT COMPARISON
+    // =====================
+    const compareMatch = message.match(/compare\s+(.+?)\s+(and|vs|v)\s+(.+)/i);
     if (compareMatch) {
       const left = compareMatch[1].trim();
       const right = compareMatch[3].trim();
-      try {
-        const toolRespRaw = await fetch(`${BASE_URL}/api/tool/compare`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ aName: left, bName: right }),
-        });
 
-        const toolResp = (await toolRespRaw.json()) as ToolResp;
-        if (toolResp.ok) {
-          const system = {
-            role: "system",
-            content:
-              "You are a helpful shopping assistant. Use the TOOL_RESULT as factual and produce a concise user-facing comparison.",
-          };
-          const toolMsg = {
-            role: "system",
-            content:
-              "TOOL_RESULT:\n" +
-              `A: ${toolResp.a.name}\n` +
-              `B: ${toolResp.b.name}\n` +
-              `A_specs: price=${toolResp.a.price}, battery=${toolResp.a.battery_hours}, ram=${toolResp.a.ram_gb}, storage=${toolResp.a.storage_gb}, rating=${toolResp.a.rating}\n` +
-              `B_specs: price=${toolResp.b.price}, battery=${toolResp.b.battery_hours}, ram=${toolResp.b.ram_gb}, storage=${toolResp.b.storage_gb}, rating=${toolResp.b.rating}\n` +
-              `DIFFS: ${JSON.stringify(toolResp.comparison.diffs)}\n` +
-              `RECOMMENDATION: ${toolResp.comparison.recommendation}`,
-          };
-          const userMsg = {
-            role: "user",
-            content: `User asked: Compare ${left} and ${right}. Provide a short comparison and recommendation.`,
-          };
+      const tool = await runTool("/api/tool/compare", {
+        aName: left,
+        bName: right,
+      });
 
-          // build messages using client history if provided
-          const messages = buildMessages({
-            clientHistory,
-            system,
-            extraSystem: toolMsg,
-            userMsg,
-            maxHistory: 12,
-          });
-
-          const llmResp = await callGemini(messages, 0.0);
-          const finalText =
-            llmResp?.choices?.[0]?.message?.content ??
-            llmResp?.choices?.[0]?.text ??
-            JSON.stringify(toolResp);
-
-
-          return NextResponse.json({
-            ok: true,
-            reply: String(finalText).trim(),
-            assistantMessage: { role: "assistant", content: String(finalText).trim() },
-          });
-        } else {
-          return NextResponse.json(
-            { ok: false, error: "compare tool error" },
-            { status: 500 }
-          );
-        }
-      } catch (e: any) {
-        console.error("chat compare error", e);
-        return NextResponse.json(
-          { ok: false, error: e?.message || String(e) },
-          { status: 500 }
-        );
+      if (!tool.ok) {
+        return NextResponse.json({ ok: false, error: "compare tool error" });
       }
-    }
 
-    // --- product enquiry detection ---
-    const asksProductRegex =
-      /(tell me about|about|show|details|specs|price|battery|ram|storage|rating|what is)\s+(.+)/i;
-    const pm = message.match(asksProductRegex);
-    if (pm) {
-      const query = pm[2].trim();
-      try {
-        const toolRespRaw = await fetch(`${BASE_URL}/api/tool/getData`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ query }),
-        });
-        const toolResp = (await toolRespRaw.json()) as ToolResp;
-
-        if (toolResp.ok) {
-          if (toolResp.product) {
-            const p = toolResp.product;
-            const system = {
-              role: "system",
-              content:
-                "You are a helpful shopping assistant. Use the TOOL output as factual. Keep answer concise and factual.",
-            };
-            const toolMsg = {
-              role: "system",
-              content: JSON.stringify({ product: p }),
-            };
-            const userMsg = {
-              role: "user",
-              content: `User asked: "${message}". Provide a 2-3 sentence product summary and one quick recommendation.`,
-            };
-
-            const messages = buildMessages({
-              clientHistory,
-              system,
-              extraSystem: toolMsg,
-              userMsg,
-              maxHistory: 12,
-            });
-
-            const llmResp = await callGemini(messages, 0.0);
-            const finalText =
-              llmResp?.choices?.[0]?.message?.content ??
-              llmResp?.choices?.[0]?.text ??
-              `${p.name} — $${p.price}`;
-            return NextResponse.json({
-              ok: true,
-              reply: String(finalText).trim(),
-              assistantMessage: { role: "assistant", content: String(finalText).trim() },
-            });
-          } else {
-            const list = toolResp.results || [];
-            if (list.length === 0)
-              return NextResponse.json({
-                ok: true,
-                reply:
-                  "I couldn't find that product. Try a different name or ask to compare products.",
-              });
-            const reply =
-              "I found these products:\n" +
-              list
-                .slice(0, 3)
-                .map((p: any) => `• ${p.name} — $${p.price}`)
-                .join("\n");
-            return NextResponse.json({
-              ok: true,
-              reply,
-              assistantMessage: { role: "assistant", content: reply },
-            });
-          }
-        } else {
-          return NextResponse.json(
-            { ok: false, error: "getData tool error" },
-            { status: 500 }
-          );
-        }
-      } catch (e: any) {
-        console.error("chat getData error", e);
-        return NextResponse.json(
-          { ok: false, error: e?.message || String(e) },
-          { status: 500 }
-        );
-      }
-    }
-
-    // --- fallback chit-chat ---
-    try {
       const system = {
         role: "system",
         content:
-          "You are a friendly shopping assistant. If product-related, recommend asking product queries.",
+          "You are a helpful shopping assistant. Use TOOL_RESULT as factual and produce a concise comparison.",
       };
-      const userMsg = { role: "user", content: message };
-      const messages = buildMessages({ clientHistory, system, userMsg, maxHistory: 12 });
-      const llmResp = await callGemini(messages, 0.7);
-      const finalText =
-        llmResp?.choices?.[0]?.message?.content ??
-        llmResp?.choices?.[0]?.text ??
-        "I can help with product info.";
-      return NextResponse.json({
-        ok: true,
-        reply: String(finalText).trim(),
-        assistantMessage: { role: "assistant", content: String(finalText).trim() },
+
+      const toolMsg = {
+        role: "system",
+        content: `TOOL_RESULT:\nA:${tool.a.name}\nB:${tool.b.name}\nA_specs:${JSON.stringify(tool.a)}\nB_specs:${JSON.stringify(tool.b)}\nDIFFS:${JSON.stringify(tool.comparison.diffs)}\nRECOMMENDATION:${tool.comparison.recommendation}`,
+      };
+
+      const userMsg = {
+        role: "user",
+        content: `User asked: Compare ${left} and ${right}.`,
+      };
+
+      const msgs = buildMessages({
+        history,
+        system,
+        userMsg,
+        extraSystem: toolMsg,
       });
-    } catch (e: any) {
-      console.error("chat fallback error", e);
+
+      const llm = await callGemini(msgs);
+      const finalText = parseLLM(llm, tool.comparison.recommendation);
+
       return NextResponse.json({
         ok: true,
-        reply:
-          "I can help with product info and comparisons. Try 'Tell me about Phone A'.",
+        reply: finalText,
+        assistantMessage: { role: "assistant", content: finalText },
       });
     }
-  } catch (e: any) {
-    console.error("chat route error", e);
-    return NextResponse.json(
-      { ok: false, error: e?.message || String(e) },
-      { status: 500 }
+
+    // =====================
+    //  PRODUCT DETAILS
+    // =====================
+    const askMatch = message.match(
+      /(tell me about|about|details|specs|price|battery|ram|storage|rating|what is)\s+(.+)/i
     );
+
+    if (askMatch) {
+      const query = askMatch[2].trim();
+
+      const tool = await runTool("/api/tool/getData", { query });
+
+      if (!tool.ok)
+        return NextResponse.json({ ok: false, error: "getData tool error" });
+
+      // Found exact product
+      if (tool.product) {
+        const p = tool.product;
+
+        const system = {
+          role: "system",
+          content:
+            "You are a helpful shopping assistant. Use TOOL output as factual. Keep answer concise.",
+        };
+
+        const toolMsg = { role: "system", content: JSON.stringify({ product: p }) };
+        const userMsg = {
+          role: "user",
+          content: `User asked: "${message}". Provide a brief product summary + quick recommendation.`,
+        };
+
+        const msgs = buildMessages({
+          history,
+          system,
+          userMsg,
+          extraSystem: toolMsg,
+        });
+
+        const llm = await callGemini(msgs);
+        const finalText = parseLLM(llm, `${p.name} — $${p.price}`);
+
+        return NextResponse.json({
+          ok: true,
+          reply: finalText,
+          assistantMessage: { role: "assistant", content: finalText },
+        });
+      }
+
+      // Multiple possible products
+      const results = tool.results || [];
+      if (results.length === 0) {
+        return NextResponse.json({
+          ok: true,
+          reply: "No matching product found.",
+          assistantMessage: { role: "assistant", content: "No matching product found." },
+        });
+      }
+
+      const reply =
+        "I found these products:\n" +
+        results.slice(0, 3).map((p: any) => `• ${p.name} — $${p.price}`).join("\n");
+
+      return NextResponse.json({
+        ok: true,
+        reply,
+        assistantMessage: { role: "assistant", content: reply },
+      });
+    }
+
+    // =====================
+    //  FALLBACK CHAT
+    // =====================
+    const system = {
+      role: "system",
+      content: "You are a friendly shopping assistant.",
+    };
+
+    const userMsg = { role: "user", content: message };
+
+    const msgs = buildMessages({ history, system, userMsg });
+
+    const llm = await callGemini(msgs, 0.7);
+    const finalText = parseLLM(llm, "I can help with product info.");
+
+    return NextResponse.json({
+      ok: true,
+      reply: finalText,
+      assistantMessage: { role: "assistant", content: finalText },
+    });
+  } catch (err: any) {
+    console.error("chat route error", err);
+    return NextResponse.json({ ok: false, error: err.message || "Error" });
   }
 }
